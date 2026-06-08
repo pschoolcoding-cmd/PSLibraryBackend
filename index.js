@@ -8,7 +8,7 @@ const app = express();
 // ✅ Only frontend domains go here
 const allowedDomains = [
   'http://localhost:5173',
-  'https://pslibrary-demo.netlify.app/'
+  'https://pslibrary-demo.netlify.app'
 ];
 
 const corsOptions = {
