@@ -51,12 +51,12 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    const { name, bid, author, genre, borrowed, whentoken } = req.body;
+    const { name, bid, author, genre, borrowed, whentoken, image, description, whoadded } = req.body;
     if (!name || !bid || !author) {
       return res.status(400).json({ error: 'name, bid and author are required' });
     }
 
-    const book = new Books({ name, bid, author, genre, borrowed, whentoken });
+    const book = new Books({ name, bid, author, genre, borrowed, whentoken, image, description, whoadded });
     const saved = await book.save();
     res.status(201).json(saved);
   } catch (err) {
