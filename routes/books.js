@@ -3,19 +3,47 @@ import Books from '../models/book.js';
 
 const router = express.Router();
 
-// GET /books?name=&author=&bid=
-// - name and author support partial, case-insensitive matches
+// GET /books?name=&author=&bid=&q=&page=&limit=&genre=
+// - name, author, q support partial, case-insensitive matches
 // - bid matches exact bid string
 router.get('/', async (req, res) => {
-  const { name, author, bid } = req.query;
+  const { name, author, bid, q, genre, page = 1, limit = 24 } = req.query;
   const filter = {};
   if (name) filter.name = new RegExp(name, 'i');
   if (author) filter.author = new RegExp(author, 'i');
   if (bid) filter.bid = bid;
+  if (genre) filter.genre = genre;
+  
+  if (q) {
+    const qRegex = new RegExp(q, 'i');
+    filter.$or = [{ name: qRegex }, { author: qRegex }];
+  }
 
   try {
-    const books = await Books.find(filter);
-    res.json(books);
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const total = await Books.countDocuments(filter);
+    // sort by reverse _id to get the newest by default
+    const books = await Books.find(filter).sort({ _id: -1 }).skip(skip).limit(limitNum);
+    
+    res.json({
+      data: books,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /books/genres
+router.get('/genres', async (req, res) => {
+  try {
+    const genres = await Books.distinct('genre');
+    res.json(genres.filter(Boolean).sort());
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
