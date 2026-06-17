@@ -7,36 +7,73 @@ const router = express.Router();
 // - name, author, q support partial, case-insensitive matches
 // - bid matches exact bid string
 router.get('/', async (req, res) => {
-  const { name, author, bid, q, genre, page = 1, limit = 24 } = req.query;
-  const filter = {};
-  if (name) filter.name = new RegExp(name, 'i');
-  if (author) filter.author = new RegExp(author, 'i');
-  if (bid) filter.bid = new RegExp('^' + bid.replace(/[*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-  if (genre) filter.genre = genre;
-  
-  if (q) {
-    const qRegex = new RegExp(q, 'i');
-    filter.$or = [{ name: qRegex }, { author: qRegex }];
-  }
-
-  try {
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
-    const skip = (pageNum - 1) * limitNum;
-
-    const total = await Books.countDocuments(filter);
-    // sort by name alphabetically, then by newest _id
-    const books = await Books.find(filter).sort({ name: 1, _id: -1 }).skip(skip).limit(limitNum);
+    const { name, author, bid, q, genre, page = 1, limit = 24, sortBy = 'recent' } = req.query;
+    const filter = {};
+    if (name) filter.name = new RegExp(name, 'i');
+    if (author) filter.author = new RegExp(author, 'i');
+    if (bid) filter.bid = new RegExp('^' + bid.replace(/[*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    if (genre) filter.genre = genre;
     
-    res.json({
-      data: books,
-      total,
-      page: pageNum,
-      pages: Math.ceil(total / limitNum)
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    if (q) {
+        const qRegex = new RegExp(q, 'i');
+        filter.$or = [{ name: qRegex }, { author: qRegex }];
+    }
+
+    try {
+        const pageNum = parseInt(page, 10);
+        const limitNum = parseInt(limit, 10);
+        const skip = (pageNum - 1) * limitNum;
+
+        // Grouping logic: Use aggregation to group by ISBN prefix (first 13 chars of bid) and Name
+        const pipeline = [
+            { $match: filter },
+            {
+                $addFields: {
+                    isbn: { $substr: ["$bid", 0, 13] }
+                }
+            },
+            {
+                $group: {
+                    _id: { isbn: "$isbn", name: "$name" },
+                    doc: { $first: "$$ROOT" },
+                    copyCount: { $sum: 1 }
+                }
+            },
+            {
+                $replaceRoot: {
+                    newRoot: { $mergeObjects: ["$doc", { copyCount: "$copyCount" }] }
+                }
+            }
+        ];
+
+        // Apply Sorting
+        if (sortBy === 'name') {
+            pipeline.push({ $sort: { name: 1, _id: -1 } });
+        } else {
+            pipeline.push({ $sort: { _id: -1 } }); // Default to recent
+        }
+
+        // Get total groups for correct pagination count
+        const countPipeline = [...pipeline];
+        countPipeline.push({ $count: "total" });
+        const countResult = await Books.aggregate(countPipeline);
+        const total = countResult[0]?.total || 0;
+
+        // Apply Pagination to the groups
+        pipeline.push({ $skip: skip });
+        pipeline.push({ $limit: limitNum });
+
+        const books = await Books.aggregate(pipeline);
+        
+        res.json({
+            data: books,
+            total,
+            page: pageNum,
+            pages: Math.ceil(total / limitNum)
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // GET /books/genres
