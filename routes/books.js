@@ -25,8 +25,8 @@ router.get('/', async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     const total = await Books.countDocuments(filter);
-    // sort by reverse _id to get the newest by default
-    const books = await Books.find(filter).sort({ _id: -1 }).skip(skip).limit(limitNum);
+    // sort by name alphabetically, then by newest _id
+    const books = await Books.find(filter).sort({ name: 1, _id: -1 }).skip(skip).limit(limitNum);
     
     res.json({
       data: books,
