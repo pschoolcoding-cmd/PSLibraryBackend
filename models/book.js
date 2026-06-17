@@ -9,7 +9,7 @@ const Books = new mongoose.Schema({
   genre:{type: mongoose.Schema.Types.Mixed, default:{}, index: true},
   borrowed: {type: String, default:"0"},
   whoadded: {type: String, default:"none"},
-  whentoken:{type:String, default:"01/04/0007"}
+  whentaken:{type:String, default:"01/04/0007"}
 });
 
 export default mongoose.model('Books', Books);

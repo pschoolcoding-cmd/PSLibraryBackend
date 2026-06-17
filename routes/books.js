@@ -116,12 +116,29 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    const { name, bid, author, genre, borrowed, whentoken, image, description, whoadded } = req.body;
+    const { name, bid, author, genre, borrowed, image, description, whoadded } = req.body;
     if (!name || !bid || !author) {
       return res.status(400).json({ error: 'name, bid and author are required' });
     }
 
-    const book = new Books({ name, bid, author, genre, borrowed, whentoken, image, description, whoadded });
+    // Set whentaken to current date by default if not provided
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const currentDate = `${day}/${month}/${year}`;
+
+    const book = new Books({ 
+      name, 
+      bid, 
+      author, 
+      genre, 
+      borrowed, 
+      whentaken: req.body.whentaken || currentDate, 
+      image, 
+      description, 
+      whoadded 
+    });
     const saved = await book.save();
     res.status(201).json(saved);
   } catch (err) {
