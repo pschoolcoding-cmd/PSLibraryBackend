@@ -11,7 +11,7 @@ router.get('/', async (req, res) => {
   const filter = {};
   if (name) filter.name = new RegExp(name, 'i');
   if (author) filter.author = new RegExp(author, 'i');
-  if (bid) filter.bid = new RegExp('^' + bid.replace(/[*+?^${}()|[\]\\]/g, '\\$&'));
+  if (bid) filter.bid = new RegExp('^' + bid.replace(/[*+?^${}()|[\]\\]/g, '\\$&'), 'i');
   if (genre) filter.genre = genre;
   
   if (q) {
