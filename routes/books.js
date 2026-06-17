@@ -7,7 +7,7 @@ const router = express.Router();
 // - name, author, q support partial, case-insensitive matches
 // - bid matches exact bid string
 router.get('/', async (req, res) => {
-    const { name, author, bid, q, genre, page = 1, limit = 24, sortBy = 'recent' } = req.query;
+    const { name, author, bid, q, genre, page = 1, limit = 24, sortBy = 'recent', all } = req.query;
     const filter = {};
     if (name) filter.name = new RegExp(name, 'i');
     if (author) filter.author = new RegExp(author, 'i');
@@ -23,6 +23,19 @@ router.get('/', async (req, res) => {
         const pageNum = parseInt(page, 10);
         const limitNum = parseInt(limit, 10);
         const skip = (pageNum - 1) * limitNum;
+
+        // If 'all' is true, return individual documents instead of grouping
+        if (all === 'true') {
+            const total = await Books.countDocuments(filter);
+            const sortCriteria = sortBy === 'name' ? { name: 1, _id: -1 } : { _id: -1 };
+            const books = await Books.find(filter).sort(sortCriteria).skip(skip).limit(limitNum);
+            return res.json({
+                data: books,
+                total,
+                page: pageNum,
+                pages: Math.ceil(total / limitNum)
+            });
+        }
 
         // Grouping logic: Use aggregation to group by ISBN prefix (first 13 chars of bid) and Name
         const pipeline = [
