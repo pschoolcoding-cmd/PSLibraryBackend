@@ -2,6 +2,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import booksRouter from './routes/books.js';
+import readersRouter from './routes/readers.js';
 
 const app = express();
 
@@ -40,6 +41,7 @@ mongoose.connect('mongodb+srv://PSlibrary:mylibrarypassword@clustergeneral.uwoc4
 
 // ✅ Routes
 app.use('/books', booksRouter);
+app.use('/readers', readersRouter);
 
 // ✅ Start server
 const PORT = process.env.PORT || 3000;
