@@ -161,5 +161,64 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PUT /books/:id - Update book details
+router.put('/:id', async (req, res) => {
+  const expectedKey = process.env.BOOK_POST_KEY || 'supersecret';
+  const providedKey = req.header('x-api-key') || req.body?.key;
+  if (providedKey !== expectedKey) {
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+
+  const { id } = req.params;
+  try {
+    let book = null;
+    if (/^[0-9a-fA-F]{24}$/.test(id)) {
+      book = await Books.findById(id);
+    }
+    if (!book) {
+      book = await Books.findOne({ bid: id });
+    }
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+
+    const { name, author, genre, description, image, borrowed, whentaken } = req.body;
+    if (name !== undefined) book.name = name;
+    if (author !== undefined) book.author = author;
+    if (genre !== undefined) book.genre = genre;
+    if (description !== undefined) book.description = description;
+    if (image !== undefined) book.image = image;
+    if (borrowed !== undefined) book.borrowed = borrowed;
+    if (whentaken !== undefined) book.whentaken = whentaken;
+
+    const updated = await book.save();
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /books/:id - Delete a book entry
+router.delete('/:id', async (req, res) => {
+  const expectedKey = process.env.BOOK_POST_KEY || 'supersecret';
+  const providedKey = req.header('x-api-key') || req.body?.key;
+  if (providedKey !== expectedKey) {
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+
+  const { id } = req.params;
+  try {
+    let deleted = null;
+    if (/^[0-9a-fA-F]{24}$/.test(id)) {
+      deleted = await Books.findByIdAndDelete(id);
+    }
+    if (!deleted) {
+      deleted = await Books.findOneAndDelete({ bid: id });
+    }
+    if (!deleted) return res.status(404).json({ error: 'Book not found' });
+    res.json({ success: true, message: 'Book deleted successfully', book: deleted });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
 

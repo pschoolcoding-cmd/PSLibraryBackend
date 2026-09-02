@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import Reader from '../models/reader.js';
+import Books from '../models/book.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'grand_library_jwt_secret_key_2026';
@@ -33,7 +34,7 @@ const authenticateReader = (req, res, next) => {
 // 1. REGISTER / SIGNUP
 router.post('/signup', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, surname, birthdate, studentClass, isExternal, email, password, role } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: 'Name, email, and password are required' });
@@ -51,9 +52,14 @@ router.post('/signup', async (req, res) => {
 
     const newReader = new Reader({
       name: name.trim(),
+      surname: surname ? surname.trim() : '',
+      birthdate: birthdate ? birthdate.trim() : '',
+      studentClass: studentClass ? studentClass.trim() : '',
+      isExternal: Boolean(isExternal),
       email: normalizedEmail,
       password: hashedPassword,
-      avatar: defaultAvatar
+      avatar: defaultAvatar,
+      role: role === 'admin' ? 'admin' : 'reader'
     });
 
     await newReader.save();
@@ -192,15 +198,19 @@ router.get('/me', authenticateReader, async (req, res) => {
 // 5. UPDATE PROFILE (Protected)
 router.put('/profile', authenticateReader, async (req, res) => {
   try {
-    const { name, avatar, password } = req.body;
+    const { name, surname, birthdate, studentClass, isExternal, avatar, password } = req.body;
     const reader = await Reader.findById(req.readerId);
 
     if (!reader) {
       return res.status(404).json({ success: false, message: 'Reader account not found' });
     }
 
-    if (name) reader.name = name.trim();
-    if (avatar) reader.avatar = avatar.trim();
+    if (name !== undefined) reader.name = name.trim();
+    if (surname !== undefined) reader.surname = surname.trim();
+    if (birthdate !== undefined) reader.birthdate = birthdate.trim();
+    if (studentClass !== undefined) reader.studentClass = studentClass.trim();
+    if (isExternal !== undefined) reader.isExternal = Boolean(isExternal);
+    if (avatar !== undefined) reader.avatar = avatar.trim();
 
     if (password) {
       reader.password = await bcrypt.hash(password, 10);
@@ -254,6 +264,17 @@ router.post('/borrow', authenticateReader, async (req, res) => {
 
     await reader.save();
 
+    // Sync Book document's borrowed status
+    const borrowerLabel = reader.name + (reader.surname ? ` ${reader.surname}` : ` (${reader.email})`);
+    try {
+      await Books.updateMany(
+        { $or: [{ bid: bookId }, { _id: bookId }] },
+        { $set: { borrowed: borrowerLabel } }
+      );
+    } catch (e) {
+      console.warn('Book status sync note:', e.message);
+    }
+
     res.json({
       success: true,
       message: 'Book borrowed successfully!',
@@ -285,6 +306,16 @@ router.post('/return', authenticateReader, async (req, res) => {
 
     borrowRecord.status = 'returned';
     await reader.save();
+
+    // Sync Book document's borrowed status back to "0" (in library)
+    try {
+      await Books.updateMany(
+        { $or: [{ bid: bookId }, { _id: bookId }] },
+        { $set: { borrowed: "0" } }
+      );
+    } catch (e) {
+      console.warn('Book status return sync note:', e.message);
+    }
 
     res.json({
       success: true,
@@ -327,6 +358,55 @@ router.post('/favorite', authenticateReader, async (req, res) => {
   } catch (error) {
     console.error('Toggle favorite error:', error);
     res.status(500).json({ success: false, message: 'Failed to toggle favorite' });
+  }
+});
+
+// 9. CREATE STUDENT ACCOUNT (Admin / Librarian only)
+router.post('/create-student', authenticateReader, async (req, res) => {
+  try {
+    const adminReader = await Reader.findById(req.readerId);
+    if (!adminReader || adminReader.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Access denied: Admin privileges required' });
+    }
+
+    const { name, surname, birthdate, studentClass, isExternal, email, password, role } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, message: 'Name, email, and password are required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const existingReader = await Reader.findOne({ email: normalizedEmail });
+
+    if (existingReader) {
+      return res.status(400).json({ success: false, message: 'An account with this email already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const defaultAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`;
+
+    const newStudent = new Reader({
+      name: name.trim(),
+      surname: surname ? surname.trim() : '',
+      birthdate: birthdate ? birthdate.trim() : '',
+      studentClass: studentClass ? studentClass.trim() : '',
+      isExternal: Boolean(isExternal),
+      email: normalizedEmail,
+      password: hashedPassword,
+      avatar: defaultAvatar,
+      role: role === 'admin' ? 'admin' : 'reader'
+    });
+
+    await newStudent.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Student account created successfully',
+      reader: sanitizeReader(newStudent)
+    });
+  } catch (error) {
+    console.error('Create student error:', error);
+    res.status(500).json({ success: false, message: 'Failed to create student account' });
   }
 });
 

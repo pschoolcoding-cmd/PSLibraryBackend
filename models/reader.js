@@ -6,6 +6,23 @@ const ReaderSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  surname: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  birthdate: {
+    type: String,
+    default: ''
+  },
+  studentClass: {
+    type: String,
+    default: ''
+  },
+  isExternal: {
+    type: Boolean,
+    default: false
+  },
   email: {
     type: String,
     required: true,

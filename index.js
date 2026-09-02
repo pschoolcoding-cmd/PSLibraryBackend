@@ -29,7 +29,8 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // ✅ MongoDB connection
-mongoose.connect('mongodb+srv://PSlibrary:mylibrarypassword@clustergeneral.uwoc4q2.mongodb.net/', {
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://PSlibrary:mylibrarypassword@clustergeneral.uwoc4q2.mongodb.net/';
+mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
   dbName: 'PSlibrary',
