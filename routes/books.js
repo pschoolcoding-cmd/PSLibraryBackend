@@ -1,7 +1,89 @@
 import express from 'express';
 import Books from '../models/book.js';
+import Reader from '../models/reader.js';
 
 const router = express.Router();
+
+// GET /books/stats - Return actual real statistics of library system
+router.get('/stats', async (req, res) => {
+  try {
+    const totalBooks = await Books.countDocuments();
+    const uniqueTitlesPipeline = [
+      {
+        $group: {
+          _id: { isbn: { $substr: ["$bid", 0, 13] }, name: "$name" }
+        }
+      },
+      { $count: "count" }
+    ];
+    const uniqueTitlesRes = await Books.aggregate(uniqueTitlesPipeline);
+    const uniqueTitles = uniqueTitlesRes[0]?.count || 0;
+    
+    const totalReaders = await Reader.countDocuments();
+    const activeBorrows = await Books.countDocuments({ borrowed: { $nin: ["0", "", null] } });
+
+    const rawGenres = await Books.distinct('genre');
+    const genreSet = new Set();
+    rawGenres.forEach(g => {
+      if (!g) return;
+      if (Array.isArray(g)) {
+        g.forEach(item => {
+          if (typeof item === 'string') {
+            const clean = item.replace(/^#/, '').trim();
+            if (clean) genreSet.add(clean.charAt(0).toUpperCase() + clean.slice(1));
+          }
+        });
+      } else if (typeof g === 'string') {
+        g.split(/[,#]/).forEach(item => {
+          const clean = item.trim();
+          if (clean) genreSet.add(clean.charAt(0).toUpperCase() + clean.slice(1));
+        });
+      }
+    });
+
+    res.json({
+      totalBooks,
+      uniqueTitles,
+      totalReaders,
+      activeBorrows,
+      categoriesCount: genreSet.size || 8
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /books/genres - Clean formatted list of categories
+router.get('/genres', async (req, res) => {
+  try {
+    const rawGenres = await Books.distinct('genre');
+    const genreSet = new Set();
+
+    rawGenres.forEach(g => {
+      if (!g) return;
+      if (Array.isArray(g)) {
+        g.forEach(item => {
+          if (typeof item === 'string') {
+            const clean = item.replace(/^#/, '').trim();
+            if (clean) genreSet.add(clean.charAt(0).toUpperCase() + clean.slice(1));
+          }
+        });
+      } else if (typeof g === 'string') {
+        g.split(/[,#]/).forEach(item => {
+          const clean = item.trim();
+          if (clean) genreSet.add(clean.charAt(0).toUpperCase() + clean.slice(1));
+        });
+      }
+    });
+
+    const defaultCategories = ['Fiction', 'Science', 'History', 'Technology', 'Literature', 'Mystery', 'Biography', 'Philosophy'];
+    defaultCategories.forEach(cat => genreSet.add(cat));
+
+    res.json(Array.from(genreSet).sort());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // GET /books?name=&author=&bid=&q=&page=&limit=&genre=
 // - name, author, q support partial, case-insensitive matches
@@ -12,7 +94,7 @@ router.get('/', async (req, res) => {
     if (name) filter.name = new RegExp(name, 'i');
     if (author) filter.author = new RegExp(author, 'i');
     if (bid) filter.bid = new RegExp('^' + bid.replace(/[*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    if (genre) filter.genre = genre;
+    if (genre) filter.genre = new RegExp(genre.replace(/[*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     
     if (q) {
         const qRegex = new RegExp(q, 'i');
